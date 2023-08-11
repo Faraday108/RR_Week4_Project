@@ -35,10 +35,92 @@ data <- read_csv("stormdata.csv", show_col_types = FALSE)
 
 When `read_csv()` is used on the url to download the data directly, an error was generated that "Reading from remote 'bz2' compressed files is not supported, download the files locally first" leading to the two step process above. 
 
+Since we are interested in economic data, we need to transform the variables `PROPDMG` and `CROPDMG` to incorporate their modifiers `PROPDMGEXP` and `CROPDMGEXP` respectively. These two modifiers are `K`, `M` or `m`, and `B` denoting thousands, millions, and billions of dollars. There are other modifiers present including "+", "?", "h", "5" that were present in low quantities (<`r 216/902297`). 
 
+```{r}
+data <- data %>%
+  mutate(PROPDMG = ifelse(is.na(PROPDMGEXP), PROPDMG, 
+                   ifelse(PROPDMGEXP == "K", PROPDMG * 10^3, 
+                   ifelse(PROPDMGEXP == "M", PROPDMG * 10^6, 
+                   ifelse(PROPDMGEXP == "B", PROPDMG * 10^9, PROPDMG)))),
+         CROPDMG = ifelse(is.na(CROPDMGEXP), CROPDMG, 
+                   ifelse(CROPDMGEXP == "K", CROPDMG * 10^3, 
+                   ifelse(CROPDMGEXP == "M", CROPDMG * 10^6, 
+                   ifelse(CROPDMGEXP == "B", CROPDMG * 10^9, CROPDMG)))))
+```
 
 ## Results  
 ### Which types of events are most harmful with respect to public health?  
 Across the United States, which types of events (as indicated in the EVTYPE variable) are most harmful with respect to population health?
+To answer this question, we have two metrics from the dataset we can look at: `FATALITIES` and `INJURIES`
+
+```{r}
+# Do NA's need to be filtered?
+data %>%
+  select(EVTYPE, FATALITIES, INJURIES) %>%
+  # Apply sum(is.na(x)) across each column
+  summarize(across(everything(), function(x) sum(is.na(.))))
+```
+
+Since there are no NA's to worry about, we can proceed to investigating which weather events are most harmful. For this analysis, I was interested in which weather events had the most cumulative fatalities and injuries over the span of the data. 
+
+```{r health_harm_fatalities}
+health_totals <- data %>%
+  # Subset the data for ease of computation
+  select(EVTYPE, FATALITIES, INJURIES) %>%
+  group_by(EVTYPE) %>%
+  # Find total fatalities and injuries
+  summarize(TOTAL_FATALITIES = sum(FATALITIES),
+            TOTAL_INJURIES = sum(INJURIES))
+
+health_totals %>%
+  # Find 10 worst types of weather events by fatalities
+  arrange(desc(TOTAL_FATALITIES)) %>%
+  slice_head(n = 10) %>%
+  # Note need to force ggplot to order EVTYPE, defaults to alphabetical
+  ggplot(aes(fct_inorder(EVTYPE), TOTAL_FATALITIES)) + 
+  geom_col() + 
+  # To aid clarity, label each column with total fatalities
+  geom_text(aes(label = TOTAL_FATALITIES), hjust = "left") +
+  coord_flip() + 
+  # Extend scale slightly so largest bar's label fits. 
+  scale_y_continuous(limits = 
+                       c(0, max(health_totals$TOTAL_FATALITIES)*1.08)) +
+  labs(
+    y = "Total Fatalities", 
+    x = "Event Type", 
+    title = "Tornadoes lead total fatalities",
+    subtitle = "Data from years 1950 till 2011"
+  )
+```
+
+This plot makes evident that the tornado weather event dominates fatalities. 
+
+```{r health_harm_injuries}
+# Same justifications
+health_totals %>%
+  arrange(desc(TOTAL_INJURIES)) %>%
+  slice_head(n = 10) %>%
+  ggplot(aes(fct_inorder(EVTYPE), TOTAL_INJURIES)) + 
+  geom_col() + 
+  geom_text(aes(label = TOTAL_INJURIES), hjust = "left") +
+  coord_flip() + 
+  scale_y_continuous(limits = c(0, max(health_totals$TOTAL_INJURIES)*1.08)) +
+  labs(
+    y = "Total Injuries", 
+    x = "Event Type", 
+    title = "Tornadoes lead total injuries as well",
+    subtitle = "Data from years 1950 till 2011"
+  )
+```
+
+And this second plot reinforces the first that Tornadoes are a dominant weather event for causing health harm for both fatalities and injuries. The remaining top 10 are largely the same across both plots with "Hail", "Thunderstorm Wind", and "Ice Storm" replacing "Avalanche", "High Wind", and "Rip Current" on injuries as these latter three tend to produce more fatalities. 
 
 ### Which types of events have the greatest economic consequences?  
+To examine this question, we can look at a subset of the data that looks at `EVTYPE` and measures of economic impact such as `PROPDMG` and `CROPDMG`. 
+
+```{r}
+data_economic <- data %>%
+  select("EVTYPE", "PROPDMG", "CROPDMG")
+```
+
