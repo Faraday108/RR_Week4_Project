@@ -169,3 +169,20 @@ econ_data %>%
 ```
 
 The most economically damaging type of weather event in total dollars of damage caused is floods. 
+
+## After reviewing peers, interesting things  
+* I noticed an interesting way of managing the labels instead of flipping them. You can rotate the labels with `theme(axis.text.x = element_text(angle = 45))
+* To help with the ordering problem of the bars, you can in the call to ggplot use `aes(x = reorder(EVTYPE, Total))`
+* To help present tables, consider `knitr::kable(data, row.names = FALSE, format = "simple", caption = "text")`
+* Remember you can use `str()` to examine the structure of a data import! * Consider having a version of caching that relies on R instead of Markdown: 
+
+```{r, eval = FALSE}
+if (!file.exists("data")) {
+  dir.create("data")
+}
+
+if (!file.exists(filePath)) {
+  donwload.file(fileUrl, destfile = filePath)
+}
+```
+
